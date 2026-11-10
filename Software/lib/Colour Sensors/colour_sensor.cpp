@@ -37,10 +37,9 @@ void ColourSensor::update()
         sensor.getAllChannels(readings);
 
         // for (uint8_t i = 0; i < 12; i++) {
-        // //     Serial.printf("%d: %d  ", i, readings[i]);
-        // // }
-        // // Serial.println();
-
+        //     Serial.printf("%d: %d  ", i, readings[i]);
+        // }
+        // Serial.println();
 
         red_victim = 0;
         green_victim = 0;

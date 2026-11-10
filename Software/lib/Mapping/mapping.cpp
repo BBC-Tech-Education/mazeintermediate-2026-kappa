@@ -58,11 +58,11 @@ void Map::init()
 
 void Map::update(uint16_t front, uint16_t right, uint16_t back, uint16_t left)
 {  
-    if (target_bearing > 180.0f) {
-        target_bearing -= 360.0f;
+    if (target_bearing > 180) {
+        target_bearing -= 360;
 
-    } else if (target_bearing <= -180.0f) {
-        target_bearing += 360.0f;
+    } else if (target_bearing <= -180) {
+        target_bearing += 360;
     }
     uint8_t abs_walls = 0;
 
@@ -123,10 +123,10 @@ void Map::create_tiles()
 
             if (neighbour_cell_id == 255) { //create tile
                 uint8_t id = tile_num++;
-                Serial.print("New Tile id: ");
-                Serial.println(id);
-                Serial.print("Tile Num: ");
-                Serial.println(tile_num);
+                // Serial.print("New Tile id: ");
+                // Serial.println(id);
+                // Serial.print("Tile Num: ");
+                // Serial.println(tile_num);
                 map = (Tile_t*)realloc(map, sizeof(Tile_t) * tile_num);
 
                 map[id].id = id;
@@ -139,23 +139,23 @@ void Map::create_tiles()
                 
                 map[id].connected_tile_id[(i + 2) % 4] = current_tile_id;
                 map[current_tile_id].connected_tile_id[i] = id;
-                Serial.print("New cell connected at ");
-                Serial.print((i + 2) % 4);
-                Serial.println(" with current");
-                Serial.print("Current cell connected at ");
-                Serial.print(i);
-                Serial.println(" with new cell");
+                // Serial.print("New cell connected at ");
+                // Serial.print((i + 2) % 4);
+                // Serial.println(" with current");
+                // Serial.print("Current cell connected at ");
+                // Serial.print(i);
+                // Serial.println(" with new cell");
 
             } else { //connect tiles
 
                 map[current_tile_id].connected_tile_id[i] = neighbour_cell_id;
                 map[neighbour_cell_id].connected_tile_id[(i + 2) % 4] = current_tile_id;
-                Serial.print("Neighbour cell connected at ");
-                Serial.print((i + 2) % 4);
-                Serial.println(" with current");
-                Serial.print("Current cell connected at ");
-                Serial.print(i);
-                Serial.println(" with neighbour");
+                // Serial.print("Neighbour cell connected at ");
+                // Serial.print((i + 2) % 4);
+                // Serial.println(" with current");
+                // Serial.print("Current cell connected at ");
+                // Serial.print(i);
+                // Serial.println(" with neighbour");
             }
         }
     }
@@ -278,29 +278,9 @@ uint8_t Map::navigate() {
         current_step++;
     }
     */
-    // test
-
-    // if (map[current_tile_id].id == 0) {
-    //     uint8_t checksilver = 0;
-
-    //     for(uint8_t i = 0; i < 4; i++) {
-    //         if (map[current_tile_id].connected_tile_id[i] < 255) {
-    //             uint8_t neighbour_tile_id = map[current_tile_id].connected_tile_id[i];
-    //             if (map[neighbour_tile_id].info & VIS_BMSK) {
-    //                 checksilver++;
-    //             }
-    //         } else {
-    //             checksilver++;
-    //         }
-    //     }
-
-    //     if (checksilver == 4) {
-    //         return state_silver;
-    //     }
-    // }
 
     if (!(map[current_tile_id].info & rel_left)) {
-        target_bearing -= 90.0f;
+        target_bearing -= 90;
         current_tile_id = map[current_tile_id].connected_tile_id[(current_heading + 7) % 4];
         Serial.println("state_left");
         Serial.print("New current id: ");
@@ -315,7 +295,7 @@ uint8_t Map::navigate() {
         return state_forward;
 
     } else if (!(map[current_tile_id].info & rel_right)) {
-        target_bearing += 90.0f;
+        target_bearing += 90;
         current_tile_id = map[current_tile_id].connected_tile_id[(current_heading + 5) % 4];
         Serial.println("State_right");
         Serial.print("New current id: ");
@@ -323,7 +303,7 @@ uint8_t Map::navigate() {
         return state_right;
 
     } else {
-        target_bearing -= 180.0f;
+        target_bearing -= 180;
         current_tile_id = map[current_tile_id].connected_tile_id[(current_heading + 6) % 4];
         Serial.println("State_180");
         Serial.print("New current id: ");
@@ -331,6 +311,11 @@ uint8_t Map::navigate() {
         return state_180;
     }
 
+    if (target_bearing > 180) {
+        target_bearing -= 360;
 
+    } else if (target_bearing <= -180) {
+        target_bearing += 360;
+    }
 
 }

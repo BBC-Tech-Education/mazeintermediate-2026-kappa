@@ -71,8 +71,6 @@ void vic_pause();
 void vic_move();
 String stateToName(int st);
 
-
-
 /////////////////////////////////// Functions //////////////////////////////////
 
 
@@ -99,7 +97,7 @@ void setup()
         delay(1000);
     }
 
-    // // Maze setup
+    // Maze setup
     state = NAV;
 }
 
@@ -110,13 +108,8 @@ void loop()
     static sensors_event_t event;
 
     lrfs.update();
-    colour.update();
-    // Serial.print(colour.detect_black());
-    
-    // Serial.print(colour.detect_silver());
-    // Serial.print(colour.detect_green());
-    // Serial.print(colour.detect_red());
-    // Serial.println();
+    // lrfs.test_lrf(); //new test function because I am sick of changing the library
+    // colour.update();
 
 
     bno.getEvent(&event);
@@ -124,6 +117,8 @@ void loop()
     current_bearing = event.orientation.x;
     if (current_bearing > 180.0f) {
         current_bearing -= 360.0f;
+    } else if (current_bearing <= -180.0f) {
+        current_bearing += 360.0f;
     }
 
     // Serial.println(stateToName(state));
@@ -239,34 +234,50 @@ void forward()
 
     // CENTERING AND ALIGNMENT CODE
     int16_t error = right - left;
-    
     float bearing_adjustment = atanf((float)error / (float)TILE_DIST) * RAD_TO_DEG;
+    
     if (bearing_adjustment > 20.0f) {
         bearing_adjustment = 20.0f;
     } else if (bearing_adjustment < -20.0f) {
         bearing_adjustment = -20.0f;
     }
 
-    float adjusted_target_bearing = target_bearing + bearing_adjustment;
+    float target_bearing = target_bearing + bearing_adjustment;
 
-    float bearing_error = current_bearing - adjusted_target_bearing;
-    
+    if (target_bearing > 180.0f) {
+            target_bearing -= 360.0f;
+        } else if (target_bearing <= -180.0f) {
+            target_bearing += 360.0f;
+        }
+
+    float bearing_error = target_bearing - current_bearing;
+
     if (bearing_error <= -180.0f) {
         bearing_error += 360.0f;
     } else if (bearing_error > 180.0f) {
         bearing_error -= 360.0f;
     }
-
-    // Serial.print("LRF ERROR: ");
-    // Serial.print(error);
-    // Serial.print("Bearing Adjustment: ");
-    // Serial.print(bearing_adjustment);
-    // Serial.print("Bearing Error: ");
-    // Serial.print(bearing_error);
+    
+    // Serial.print("Error: ");
+    // Serial.print(error); 
+    // Serial.print("\t");
+    // Serial.print("Bearing Adj.: ");
+    // Serial.print(bearing_adjustment); 
+    // Serial.print("\t");
+    // Serial.print("current bearing: ");
+    // Serial.print(current_bearing); 
+    // Serial.print("\t");
+    // Serial.print("target bearing: ");
+    // Serial.print(target_bearing);
+    // Serial.print("\t");
+    // Serial.print("bearing error: ");
+    // Serial.print(bearing_error); 
+    // Serial.print("\t");
     // Serial.println();
 
     float correction = bearing_error * BEARING_KP;
     
+
 
     // ACTUAL LINE THAT MOVES MOTORS
     motor.move(MOVE_SPEED - correction, MOVE_SPEED + correction);    
@@ -430,7 +441,7 @@ void black_tile_pause()
             target_bearing += 360.0f;
         }
     } else {
-        motor.move(0.0f, 0.0f);
+        motor.move(0.0f, 0.0f); //NOTE CHANGE THIS TO BEFORE IF STATEMENT FOR EFFICIENCY - Rory
     }
 }
 

@@ -22,7 +22,7 @@
 #define NEW_VIC     0
 #define SEEN_VIC    1
 
-#define CHECK_WALL_DIST 150
+#define CHECK_WALL_DIST 200
 
 class Map {
 public:
@@ -76,7 +76,7 @@ private:
     Search_t* search;
     uint8_t map_solved;
 
-    float target_bearing;
+    uint16_t target_bearing;
 
 };
 
