@@ -48,7 +48,7 @@ void ColourSensor::update()
 
 
 
-        if (readings[4] < 5000) {
+        if (readings[4] < 3000) {
             black_tile = 1;
             
         } else {

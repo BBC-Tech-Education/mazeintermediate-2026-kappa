@@ -54,6 +54,7 @@ void LRFs::update()
         if (sensors[i].timeoutOccurred()) {
             lrf_values[i] = 0;
         }
+        Serial.print("\t");
     }
 }
 

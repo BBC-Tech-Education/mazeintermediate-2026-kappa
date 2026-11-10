@@ -78,6 +78,7 @@ String stateToName(int st);
 void setup()
 {
     delay(2000);
+    pause_start = millis();
 
     // Initialise all the sensors
 
@@ -200,6 +201,8 @@ void forward()
         state = PAUSE;
         return; 
     } 
+
+
     
     
     // ERROR CODE: CREATING WALLS IF NOT THERE, USING WALLS IF THERE
@@ -292,8 +295,21 @@ void forward()
             silver_tile_cond = 1;
             unharmed_victim_cond = 0;
             harmed_victim_cond = 0;
+            if (millis() > 10000) {
+                pause_start = millis();
+                silver_tile_cond = 1;
+                unharmed_victim_cond = 0;
+                harmed_victim_cond = 0;
+                state = PAUSE;
+                return;
+            }
         }
+    } else if (colour.detect_green() || colour.detect_red() || colour.detect_black()) {
+        pause_start = millis();
+        state = VIC_PAUSE;
+        return;
     }
+
 
 }
 
@@ -368,6 +384,8 @@ void navigation()
     uint16_t left = (lrfs.get_value(LRF_LB) + lrfs.get_value(LRF_LF)) / 2;
 
 
+    // maze.update(front, right, back, left);
+    // uint8_t next_state = maze.navigate();
     maze.update(front, right, back, left);
     uint8_t next_state = maze.navigate();
     switch(next_state) {
@@ -396,11 +414,7 @@ void navigation()
             target_bearing -= 180.0f;
             state = ROTATE_180;
             break;
-
-        // case(state_silver):
-        //     state = SILVER;
-        //     break;
-    }
+        }
 
     if (target_bearing > 180.0f) {
          target_bearing -= 360.0f;
@@ -414,7 +428,7 @@ void black_tile_backwards()
 
     uint16_t front = (lrfs.get_value(LRF_FL) + lrfs.get_value(LRF_FR)) / 2;
     uint16_t back = (lrfs.get_value(LRF_BL) + lrfs.get_value(LRF_BR)) / 2;
-
+    
     if (use_forward_lrfs) {
         if (front > (target_dist + TILE_DIST)) {
             pause_start = millis();
@@ -497,6 +511,7 @@ void victims()
 
 void silver_tile()
 {
+    motor.move(0.0f, 0.0f);
     uint8_t i;
     for (i = 0; i < (harmed_victim_counter + 1); i++) {
         digitalWrite(LED_RED, HIGH);
@@ -517,7 +532,6 @@ void silver_tile()
 }
 
 void pause()
-
 {
     if ((millis() - pause_start) > 250) {
         if (silver_tile_cond) {
@@ -551,6 +565,8 @@ void vic_pause() {
             maze.found_black_tile();
             harmed_victim_cond = 0;
             unharmed_victim_cond = 0;
+            silver_tile_cond = 0;
+            state = BT_BACK;
             return;
         }
     } else {
@@ -605,10 +621,13 @@ String stateToName(int st) {
         return "Nav State";
         break;
     case BT_BACK:
-        return "BT";
+        return "BT_BACK";
+        break;
+    case BT_PAUSE:
+        return "BT_pause";
         break;
     case BT_ROTATE:
-        return "";
+        return "BT_Rotate";
         break;
     case VICTIMS:
        return "V";
@@ -618,6 +637,12 @@ String stateToName(int st) {
         break;
     case PAUSE:
         return "Pause";
+        break;
+    case VIC_MOVE:
+        return "vic_move";
+        break;
+    case VIC_PAUSE:
+        return "vic_pause";
         break;
     default:
         return "NAN";
