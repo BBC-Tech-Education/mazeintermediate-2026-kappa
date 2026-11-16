@@ -84,31 +84,24 @@ void Map::update(uint16_t front, uint16_t right, uint16_t back, uint16_t left)
 
     map[current_tile_id].info |= VIS_BMSK;
 
-    Serial.print("Current Cell: ");
-    Serial.print(map[current_tile_id].id);
-    Serial.print("\t");
+    // Serial.print("Current Cell: ");
+    // Serial.print(map[current_tile_id].id);
+    // Serial.print("\t");
 
-    if (map[current_tile_id].info & WALL_N_BMSK) {
-        Serial.print("N \t");
-    }
-    if (map[current_tile_id].info & WALL_E_BMSK) {
-        Serial.print("E \t");
-    }
-    if (map[current_tile_id].info & WALL_S_BMSK) {
-        Serial.print("S \t");
-    }
-    if (map[current_tile_id].info & WALL_W_BMSK) {
-        Serial.print("W \t");
-    }
-    Serial.print("\n");
+    // if (map[current_tile_id].info & WALL_N_BMSK) {
+    //     Serial.print("N \t");
+    // }
+    // if (map[current_tile_id].info & WALL_E_BMSK) {
+    //     Serial.print("E \t");
+    // }
+    // if (map[current_tile_id].info & WALL_S_BMSK) {
+    //     Serial.print("S \t");
+    // }
+    // if (map[current_tile_id].info & WALL_W_BMSK) {
+    //     Serial.print("W \t");
+    // }
+    // Serial.print("\n");
     create_tiles();
-
-
-    // follow left wall
-
-    // Figure out which way to go next
-
-    // Return the next direction
 }
 
 void Map::create_tiles()
@@ -119,8 +112,7 @@ void Map::create_tiles()
             int8_t target_x = map[current_tile_id].x + direction_lookup[i].x;
             int8_t target_y = map[current_tile_id].y + direction_lookup[i].y;
 
-            uint8_t neighbour_cell_id = find_tile(target_x, target_y);
-
+            uint8_t neighbour_cell_id = find_tile_map(target_x, target_y);
             if (neighbour_cell_id == 255) { //create tile
                 uint8_t id = tile_num++;
                 // Serial.print("New Tile id: ");
@@ -161,7 +153,7 @@ void Map::create_tiles()
     }
 }
 
-uint8_t Map::find_tile(int8_t target_x, int8_t target_y)
+uint8_t Map::find_tile_map(int8_t target_x, int8_t target_y)
 {
     for(uint8_t i = 0; i < tile_num; i++) {
         if ((map[i].x == target_x) && (map[i].y == target_y)) {
@@ -172,6 +164,17 @@ uint8_t Map::find_tile(int8_t target_x, int8_t target_y)
     }
     return 255;
 }
+
+uint8_t Map::find_search_id(uint8_t search_tile_id)
+{
+    for (uint8_t i = 0; i < search_num; i++) {
+        if (search[i].tile_id == search_tile_id) {
+            return i;
+        }
+    }
+    return 255;
+}
+
 //test BFS search
 void Map::search_map() 
 {
@@ -193,31 +196,37 @@ void Map::search_map()
             found_next_tile = 1;
             break;
         }
-
+        //note if the current tile is the starting tile
         if (map[current_search_tile_id].id == 0) {
             uint8_t start_search_id = current_search_id;
         }
 
-        for (uint8_t i = 0; i < 4; i++) {
-            if ((map[current_search_tile_id].connected_tile_id[i] < 255) && (!(map[current_search_tile_id].info & BLACK_BMSK))) {
-                uint8_t neighbour_tile_id = map[current_search_tile_id].connected_tile_id[i];
-                uint8_t neighbour_search_id = search_num++;
+        //check if black, if true ignore and go to next
+        if (!(map[current_search_tile_id].info & BLACK_BMSK)) {
+            //search through neighbours and check if exist
+            for (uint8_t i = 0; i < 4; i++) {
+                if ((map[current_search_tile_id].connected_tile_id[i] < 255)) {
 
-                search = (Search_t*)realloc(search, sizeof(Search_t) * search_num);
-
-                search[neighbour_search_id].search_id = neighbour_search_id;
-                search[neighbour_search_id].tile_id = neighbour_tile_id;
-                search[neighbour_search_id].parent_search_id = current_search_id;
-        
+                    uint8_t neighbour_tile_id = map[current_search_tile_id].connected_tile_id[i];
+                    //check if not seen, if true add to search queue w/ details
+                    if (find_search_id(neighbour_tile_id) == 255) {
+                        uint8_t neighbour_search_id = search_num++;
+                        search = (Search_t*)realloc(search, sizeof(Search_t) * search_num);
+                        search[neighbour_search_id].search_id = neighbour_search_id;
+                        search[neighbour_search_id].tile_id = neighbour_tile_id;
+                        search[neighbour_search_id].parent_search_id = current_search_id;
+                    }
+                }
             }
         }
+        //go to next search
         current_search_id++;
     }
 
 
     if (found_next_tile) {
-        step_num = 1;
-        nav = (Navigation_t*)malloc(sizeof(Navigation_t) * step_num);
+        step_num = 0;
+        nav = nullptr;
         for (uint8_t search_id = current_search_id; search_id > 0; search_id = search[search_id].parent_search_id) {
             
             uint8_t tile_id = search[search_id].tile_id;
@@ -229,10 +238,10 @@ void Map::search_map()
         std::reverse(nav, nav + step_num);
 
     } else {
-        //silver_state search path
+        //start search path
         map_solved = 1;
-        step_num = 1;
-        nav = (Navigation_t*)malloc(sizeof(Navigation_t) * step_num);
+        step_num = 0;
+        nav = nullptr;
         for (uint8_t search_id = start_search_id; search_id > 0; search_id = search[search_id].parent_search_id) {
             
             uint8_t tile_id = search[search_id].tile_id;

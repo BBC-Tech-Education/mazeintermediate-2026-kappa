@@ -29,7 +29,7 @@ typedef enum {
     BT_PAUSE,
     BT_ROTATE,
     VICTIMS,
-    SILVER,
+    END,
     PAUSE,
     VIC_PAUSE,
     VIC_MOVE,
@@ -39,11 +39,10 @@ typedef enum {
 
 uint8_t state;
 uint16_t target_dist;
-uint8_t use_forward_lrfs;
-
 
 float target_bearing = 0.0f;
 float current_bearing = 0.0f;
+float bearing_adjustment = 0.0f;
 unsigned long pause_start = millis();
 
 uint8_t harmed_victim_cond;
@@ -63,25 +62,21 @@ void black_tile_backwards();
 void black_tile_pause();
 void black_tile_rotate();
 void victims();
-void silver_tile();
+void end();
 void pause();
 void dropper_left();
 void dropper_right();
 void vic_pause();
 void vic_move();
+float wrap_angle(float angle);
 String stateToName(int st);
 
 /////////////////////////////////// Functions //////////////////////////////////
-
-
 
 void setup()
 {
     delay(2000);
     pause_start = millis();
-
-    // Initialise all the sensors
-
     motor.init();
     lrfs.init();
     colour.init();
@@ -91,8 +86,8 @@ void setup()
     pinMode(DROPPER, OUTPUT);
 
     dropper_servo.attach(DROPPER);
-    delay(100);
     dropper_servo.write(90);
+
     while(!bno.begin(OPERATION_MODE_IMUPLUS)) {
         Serial.println("No BNO055 detected. Check your wiring or I2C ADDR.");
         delay(1000);
@@ -104,26 +99,17 @@ void setup()
 
 void loop()
 {
-
-    // READ ALL OF THE SENSORS
     static sensors_event_t event;
 
     lrfs.update();
     // lrfs.test_lrf(); //new test function because I am sick of changing the library
     // colour.update();
-
-
     bno.getEvent(&event);
 
     current_bearing = event.orientation.x;
-    if (current_bearing > 180.0f) {
-        current_bearing -= 360.0f;
-    } else if (current_bearing <= -180.0f) {
-        current_bearing += 360.0f;
-    }
+    current_bearing = wrap_angle(current_bearing);
 
     // Serial.println(stateToName(state));
-    // Serial.println(use_forward_lrfs);
 
     // FSM
     switch (state) {
@@ -154,8 +140,8 @@ void loop()
     case VICTIMS:
         victims();
         break;
-    case SILVER:
-        silver_tile();
+    case END:
+        end();
         break;
     case PAUSE:
         pause();
@@ -178,11 +164,7 @@ void forward()
     uint16_t front = (lrfs.get_value(LRF_FL) + lrfs.get_value(LRF_FR)) / 2;
     uint16_t back = (lrfs.get_value(LRF_BL) + lrfs.get_value(LRF_BR)) / 2;
 
-    if (colour.detect_green() || colour.detect_red()) {
-        pause_start = millis();
-        state = VIC_PAUSE;
-        return;
-    } else if (colour.detect_black()) {
+    if (colour.detect_black()) {
         state = BT_BACK;
         maze.found_black_tile();
         harmed_victim_cond = 0;
@@ -190,54 +172,50 @@ void forward()
         return;
     }
 
-
-    if (use_forward_lrfs && (front < target_dist)) {
+    if (front < MIN_TARGET_DIST) {
         pause_start = millis();
         state = PAUSE;
         return;
-
-    } else if (!use_forward_lrfs && (back > target_dist)) {
+    }
+    
+    //LRF use
+    if (front < target_dist) {
         pause_start = millis();
         state = PAUSE;
-        return; 
-    } 
+        return;
+    }
 
-
-    
-    
-    // ERROR CODE: CREATING WALLS IF NOT THERE, USING WALLS IF THERE
     uint16_t leftlf = lrfs.get_value(LRF_LF);
     uint16_t leftlb = lrfs.get_value(LRF_LB);
 
     uint16_t left;
-    if ((leftlf < 210) && (leftlb < 210)) {
+    if ((leftlf < CHECK_WALL) && (leftlb < CHECK_WALL)) {
          left = (leftlf + leftlb) / 2;
-    } else if (leftlf < 210) {
+    } else if (leftlf < CHECK_WALL) {
         left = leftlf;
-    } else if (leftlb < 210) {
+    } else if (leftlb < CHECK_WALL) {
         left = leftlb;
     } else {
-        left = 110;
+        left = IMAG_WALL_DIST;
     }
 
     uint16_t rightlf = lrfs.get_value(LRF_RF);
     uint16_t rightlb = lrfs.get_value(LRF_RB);
 
     uint16_t right;
-    if ((rightlf < 210) && (rightlb < 210)) {
+    if ((rightlf < CHECK_WALL) && (rightlb < CHECK_WALL)) {
         right = (rightlf + rightlb) / 2;
-    } else if (rightlf < 210) {
+    } else if (rightlf < CHECK_WALL) {
         right = rightlf;
-    } else if (rightlb < 210) {
+    } else if (rightlb < CHECK_WALL) {
         right = rightlb;
     } else {
-        right = 110;
+        right = IMAG_WALL_DIST;
     }
-
 
     // CENTERING AND ALIGNMENT CODE
     int16_t error = right - left;
-    float bearing_adjustment = atanf((float)error / (float)TILE_DIST) * RAD_TO_DEG;
+    bearing_adjustment = atanf((float)error / (float)TILE_DIST) * RAD_TO_DEG;
     
     if (bearing_adjustment > 20.0f) {
         bearing_adjustment = 20.0f;
@@ -245,89 +223,37 @@ void forward()
         bearing_adjustment = -20.0f;
     }
 
-    float target_bearing = target_bearing + bearing_adjustment;
+    float new_bearing = wrap_angle(target_bearing + bearing_adjustment);
 
-    if (target_bearing > 180.0f) {
-            target_bearing -= 360.0f;
-        } else if (target_bearing <= -180.0f) {
-            target_bearing += 360.0f;
-        }
-
-    float bearing_error = target_bearing - current_bearing;
-
-    if (bearing_error <= -180.0f) {
-        bearing_error += 360.0f;
-    } else if (bearing_error > 180.0f) {
-        bearing_error -= 360.0f;
-    }
+    float bearing_error = wrap_angle(new_bearing - current_bearing);
     
-    // Serial.print("Error: ");
-    // Serial.print(error); 
-    // Serial.print("\t");
-    // Serial.print("Bearing Adj.: ");
-    // Serial.print(bearing_adjustment); 
-    // Serial.print("\t");
-    // Serial.print("current bearing: ");
-    // Serial.print(current_bearing); 
-    // Serial.print("\t");
-    // Serial.print("target bearing: ");
-    // Serial.print(target_bearing);
-    // Serial.print("\t");
-    // Serial.print("bearing error: ");
-    // Serial.print(bearing_error); 
-    // Serial.print("\t");
-    // Serial.println();
+    Serial.print("Error: ");
+    Serial.print(error); 
+    Serial.print("\t");
+    Serial.print("Bearing Adj.: ");
+    Serial.print(bearing_adjustment); 
+    Serial.print("\t");
+    Serial.print("current bearing: ");
+    Serial.print(current_bearing); 
+    Serial.print("\t");
+    Serial.print("target bearing: ");
+    Serial.print(new_bearing);
+    Serial.print("\t");
+    Serial.print("bearing error: ");
+    Serial.print(bearing_error); 
+    Serial.print("\t");
+    Serial.println();
 
     float correction = bearing_error * BEARING_KP;
-    
-
 
     // ACTUAL LINE THAT MOVES MOTORS
-    motor.move(MOVE_SPEED - correction, MOVE_SPEED + correction);    
-
-
-    // COLOUR DETECTION
-
-    if (colour.detect_silver()) {
-        if (pause_start < 10000) {
-            silver_tile_cond = 0;        
-        } else {
-            silver_tile_cond = 1;
-            unharmed_victim_cond = 0;
-            harmed_victim_cond = 0;
-            if (millis() > 10000) {
-                pause_start = millis();
-                silver_tile_cond = 1;
-                unharmed_victim_cond = 0;
-                harmed_victim_cond = 0;
-                state = PAUSE;
-                return;
-            }
-        }
-    } else if (colour.detect_green() || colour.detect_red() || colour.detect_black()) {
-        pause_start = millis();
-        state = VIC_PAUSE;
-        return;
-    }
-
-
+    motor.move(MOVE_SPEED - correction, MOVE_SPEED + correction);
 }
 
 void rotate_left()
 {
     if (fabs(current_bearing - target_bearing) < ROTATION_MARGIN) {
-        uint16_t front = (lrfs.get_value(LRF_FL) + lrfs.get_value(LRF_FR)) / 2;
-        uint16_t back = (lrfs.get_value(LRF_BL) + lrfs.get_value(LRF_BR)) / 2;
-            if (front > (back + TILE_DIST)) {
-                use_forward_lrfs = 0;
-                target_dist = back + TILE_DIST;    
-            } else {
-                use_forward_lrfs = 1;
-                target_dist = max(front - TILE_DIST, MIN_TARGET_DIST);
-            }
             state = FORWARD;
-
-        
     
     } else {
         motor.move(-ROTATE_SPEED, ROTATE_SPEED);
@@ -337,16 +263,6 @@ void rotate_left()
 void rotate_right()
 {
     if (fabs(current_bearing - target_bearing) < ROTATION_MARGIN) {
-        uint16_t front = (lrfs.get_value(LRF_FL) + lrfs.get_value(LRF_FR)) / 2;
-        uint16_t back = (lrfs.get_value(LRF_BL) + lrfs.get_value(LRF_BR)) / 2;
-
-            if (front > (back + TILE_DIST)) {
-                use_forward_lrfs = 0;
-                target_dist = back + TILE_DIST;    
-            } else {
-                use_forward_lrfs = 1;
-                target_dist = max(front - TILE_DIST, MIN_TARGET_DIST);
-            }
             state = FORWARD;
 
         
@@ -358,16 +274,6 @@ void rotate_right()
 void rotate_180()
 {
     if (fabs(current_bearing - target_bearing) < ROTATION_MARGIN) {
-        uint16_t front = (lrfs.get_value(LRF_FL) + lrfs.get_value(LRF_FR)) / 2;
-        uint16_t back = (lrfs.get_value(LRF_BL) + lrfs.get_value(LRF_BR)) / 2;
-
-            if (front > (back + TILE_DIST)) {
-                use_forward_lrfs = 0;
-                target_dist = back + TILE_DIST;    
-            } else {
-                use_forward_lrfs = 1;
-                target_dist = max(front - TILE_DIST, MIN_TARGET_DIST);
-            }
             state = FORWARD;
 
     } else {
@@ -383,20 +289,11 @@ void navigation()
     uint16_t back = (lrfs.get_value(LRF_BL) + lrfs.get_value(LRF_BR)) / 2;
     uint16_t left = (lrfs.get_value(LRF_LB) + lrfs.get_value(LRF_LF)) / 2;
 
-
-    // maze.update(front, right, back, left);
-    // uint8_t next_state = maze.navigate();
     maze.update(front, right, back, left);
     uint8_t next_state = maze.navigate();
+    
     switch(next_state) {
         case(state_forward):
-            if (front > (back + TILE_DIST)) {
-                use_forward_lrfs = 0;
-                target_dist = back + TILE_DIST;    
-            } else {
-                use_forward_lrfs = 1;
-                target_dist = max(front - TILE_DIST, MIN_TARGET_DIST);
-            }
             state = FORWARD;
             break;
 
@@ -416,11 +313,7 @@ void navigation()
             break;
         }
 
-    if (target_bearing > 180.0f) {
-         target_bearing -= 360.0f;
-    } else if (target_bearing <= -180.0f) {
-        target_bearing += 360.0f;
-    }
+    target_bearing = wrap_angle(target_bearing);
 }
 
 void black_tile_backwards()
@@ -429,19 +322,12 @@ void black_tile_backwards()
     uint16_t front = (lrfs.get_value(LRF_FL) + lrfs.get_value(LRF_FR)) / 2;
     uint16_t back = (lrfs.get_value(LRF_BL) + lrfs.get_value(LRF_BR)) / 2;
     
-    if (use_forward_lrfs) {
-        if (front > (target_dist + TILE_DIST)) {
-            pause_start = millis();
-            state = BT_PAUSE;
-            return;
-        }
-    } else {
-        if (back < (target_dist - TILE_DIST)) {
-            pause_start = millis();
-            state = BT_PAUSE;
-            return;
-        }
-    }
+    if (front > (target_dist + TILE_DIST)) {
+        pause_start = millis();
+        state = BT_PAUSE;
+        return;
+     }
+
 
     motor.move(-MOVE_SPEED, -MOVE_SPEED);
 }
@@ -509,7 +395,7 @@ void victims()
     }
 }
 
-void silver_tile()
+void end()
 {
     motor.move(0.0f, 0.0f);
     uint8_t i;
@@ -527,7 +413,7 @@ void silver_tile()
         delay(500);
     }
     delay(60000);
-    state = SILVER;
+    state = END;
     return;
 }
 
@@ -535,7 +421,7 @@ void pause()
 {
     if ((millis() - pause_start) > 250) {
         if (silver_tile_cond) {
-            state = SILVER;
+            state = END;
         } else if (unharmed_victim_cond || harmed_victim_cond) {
             state = VICTIMS;
         
@@ -576,7 +462,6 @@ void vic_pause() {
 }
 
 void dropper_left() {
-
     //90 is centre, 180 is right, 0 is left.
     delay(100);
     dropper_servo.write(160); //turns motor right (drops single package)
@@ -601,6 +486,16 @@ void vic_move() {
     } else {
         motor.move(MOVE_SPEED, MOVE_SPEED);
     }
+}
+
+float wrap_angle(float angle) 
+{
+    if (angle <= -180.0f) {
+        angle += 360.0f;
+    } else if (angle > 180.0f) {
+        angle -= 360.0f;
+    }
+    return angle;
 }
 
 String stateToName(int st) {
@@ -632,8 +527,8 @@ String stateToName(int st) {
     case VICTIMS:
        return "V";
         break;
-    case SILVER:
-        return "Sil";
+    case END:
+        return "End";
         break;
     case PAUSE:
         return "Pause";

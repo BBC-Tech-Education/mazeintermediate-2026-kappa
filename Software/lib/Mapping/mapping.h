@@ -38,7 +38,8 @@ public:
 private:
 
     void create_tiles();
-    uint8_t find_tile(int8_t target_x, int8_t target_y);
+    uint8_t find_tile_map(int8_t target_x, int8_t target_y);
+    uint8_t find_search_id(uint8_t search_tile_id);
     void search_map();
 
     typedef struct {
@@ -68,6 +69,7 @@ private:
 
     uint8_t current_tile_id;
     uint8_t tile_num;
+    uint8_t search_num;
     Tile_t* map;
 
     uint8_t step_num;
